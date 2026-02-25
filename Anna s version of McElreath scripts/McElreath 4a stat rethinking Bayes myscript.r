@@ -98,10 +98,10 @@ zscore <- function(dat) {
   return(z)
 }
 
-simdata1_z <- data.frame(zscore(simdata1$Height), simdata1$Weight)
-simdata2_z <- data.frame(zscore(simdata2$Height), simdata2$Weight)
-simdata3_z <- data.frame(zscore(simdata3$Height), simdata3$Weight)
-realdata_z <- data.frame(zscore(realdata$Height), realdata$Weight)
+simdata1_z <- data.frame(zscore(simdata1$Height), zscore(simdata1$Weight))
+simdata2_z <- data.frame(zscore(simdata2$Height), zscore(simdata2$Weight))
+simdata3_z <- data.frame(zscore(simdata3$Height), zscore(simdata3$Weight))
+realdata_z <- data.frame(zscore(realdata$Height), zscore(realdata$Weight))
 colnames(simdata1_z) <- c("Height", "Weight")
 colnames(simdata2_z) <- c("Height", "Weight")
 colnames(simdata3_z) <- c("Height", "Weight")
@@ -160,9 +160,9 @@ plot(realdata_z$Weight ~ realdata_z$Height
      , col = alpha("slateblue", 0.3)
      , pch = 19
      , xlim = c(-3, 3)
-     , ylim = c(w_min, w_max)
+     , ylim = c(-3, 3)
      , xlab = "Z-Score Height"
-     , ylab = "Weight"
+     , ylab = "Z-Score Weight"
 )
 points(Weight ~ Height
        , data = simdata3_z
@@ -184,10 +184,11 @@ points(Weight ~ Height
 )
 mtext("Standardized x", 3, 2, cex = 1.25)
 # What's different between these two graphs?
-# The overall orientation of points to each other, within each dataset,
-# should be the same. However, the axis with less variation will be drawn
-# out, and the point cloud should have moved to be centered on 0 in both 
-# dimensions. 
+# The overall orientation of points to each other, within each dataset (!),
+# should be the same. However, the point cloud should have moved to be 
+# centered on 0 in both dimensions (axes), and the axis that had less variation
+# will be drawn out, so that the amount of variation looks the same in both 
+# axes. 
 
 ### Define priors -------------------------------------
 # Remember priors are really also probability distributions (just like

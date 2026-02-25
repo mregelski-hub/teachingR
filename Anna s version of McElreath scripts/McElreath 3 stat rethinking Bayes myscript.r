@@ -413,6 +413,7 @@ shade(weight.PI, height_seq
 )
 # In hindsight it might be better for an actual plot to plot these intervals 
 # first, then the posterior lines and then the data points on top. 
+# So that's what we're doing below, also with slightly different colors:
 
 ###### Redoing the entire graph ---------------------
 plot(NULL 
@@ -452,7 +453,7 @@ lines(height_seq, weight.PI[2,], lty=2, lwd=2
       , col=col.alpha("violetred3", 0.3))
 # Data points we are not using
 points(d2$weight ~ d2$height
-       , col = alpha("slateblue2", 0.3)
+       , col = alpha("slateblue2", 0.5)
        , lwd = 1)
 # Data points (actual, not simulated)
 points(dN$weight ~ dN$height
