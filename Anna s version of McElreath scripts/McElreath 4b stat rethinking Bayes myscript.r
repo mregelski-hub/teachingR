@@ -2,7 +2,7 @@
 ## ON Richard McElreath's 'Statistical Rethinking'
 # Anna Dornhaus, 2025
 
-########### PART IVb: Doing the full workflow with splines ##########
+########### PART IVb: Curves and splines ##########
 ## I recommend 'closing' all sections for better readability, and only opening the section
 ## you are working on: click on the small triangles by the line numbers to close/open
 ##
@@ -12,8 +12,179 @@ library(scales)
 library(splines)
 library(viridisLite)
 
+##############################################################################
+
+### FITTING CURVES -----------------------------------------------
+#### Chapter 4 -----------------------------------
+#First, going along with the book & videos about how curve-fitting works
+
+# Actual dataset - plotting just to check
+plot(d$weight~d$height)
+xbar <- mean(d$height)
+ybar <- mean(d$weight)
+# Standardize data
+H_stand <- zscore(d$height)
+Hsq_stand <- H_stand*H_stand
+# Priors
+intercept_prior_mean <- 50
+intercept_prior_SD <- 50
+linearslope_prior_mean <- 0
+linearslope_prior_sd <- 1
+sigma_prior_max <- 20
+# Other elements of the prior are the parameters for the quadratic slope
+# and of course the functional form/distribution of these, e.g. lognormal 
+# or uniform; these are specified in the model
+
+# Simulate some samples from priors for plot (i.e. parameter value sets)
+n_plot <- 50
+intercepts_at_mean <- rnorm(n_plot, intercept_prior_mean, intercept_prior_SD)
+slopes <- rlnorm(n_plot, linearslope_prior_mean, linearslope_prior_sd)
+
+##### Quadratic model -----------------
+# Which is a terrible fit. 
+# illustrate by showing several panels with different sample size?
+
+# Optionally, define starting points for the estimation algorithm
+start <- list(
+  a = ybar,
+  b1 = 0.5,
+  b2 = 0,
+  sigma = sd(d$weight)
+)
+
+# Actual model
+# using log-normal distribution for linear factor to force positive slope
+model2.0 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <- a + b1*H_stand + b2*Hsq_stand,
+    a ~ dnorm(intercept_prior_mean, intercept_prior_SD),
+    b1 ~ dlnorm(linearslope_prior_mean, linearslope_prior_sd),
+    b2 ~ dnorm(linearslope_prior_mean, linearslope_prior_sd),
+    sigma ~ dunif(0, sigma_prior_max)
+  )
+  , data=d
+  , start = start
+)
+
+precis(model2.0)
+
+# Now we'll graph and interpret the result by sampling from the posterior
+height_seq <- seq(min(H_stand)*1.1, max(H_stand)*1.1, len=n_plot)
+# The n_plot just determines the resolution here - doesn't need to be the same
+# value as what we used for number of lines above. I am multiplying the max and
+# min only to give the plot a bit more space on either side
+# We defined the square term as a separate value, so need to generate this
+sim_input_xvalues <- list(H_stand=height_seq, Hsq_stand=height_seq^2)
+sim_weight <- sim(model2.0, data = sim_input_xvalues, n=100)
+# Note the above generates predictions from the posterior using sim()
+# Remember 'PI' stands for percentile interval
+weight.PI <- apply(sim_weight, 2, PI, prob=0.95)
+# Instead of predictions, we can extract posteriors for mu:
+mu <- link(model2.0, data=sim_input_xvalues, n=1000)
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.95)
+
+# McElreath's graph, fig. 4.11 in book:
+plot(weight ~ H_stand, data=d, col=col.alpha(rangi2,1) 
+     , xaxt = "n" # We'll plot original units on later
+     , xlab = "Height [cm]"
+     , ylab = "Weight [kg]"
+     , xlim = c(min(H_stand), max(H_stand))
+)
+lines(height_seq, mu.mean, lwd = 3)
+shade(mu.PI , height_seq ) # Describing posterior for mu
+shade(weight.PI , height_seq ) # Describing posterior for overall data
+
+# Plotting the correct x-axis units
+at <- c(-3,-2,-1,0,1)
+labels <- round(at*sd(d$height) + mean(d$height))
+axis(side=1, at=at, labels=round(labels,1))
+
+# Note my graph above had also used this more explicit way of sampling
+# from the posterior:
+samples_of_posterior <- extract.samples(model2.0, n=n_plot)
+
+#### VIDEO 4 --------------------
+
+## McElreath says DO NOT USE polynomials. Why? Because they are 
+## 'global' smoothers, assuming various symmetries across the whole 
+## x-range, and any datapoint anywhere can change the curve arbitrarily 
+## far away from itself.
+## After all, we are talking about not-mechanistically motivated
+## polynomials purely for the purpose of fitting a non-linear pattern.
+## It is always better to use a functional form derived from mechanistic
+## understanding (e.g. if you expect something to be logarithmic or something else).
+
+## If you don't have that, use splines. Splines simply create localized
+## fits and then smoothe the transitions. 
+
+#### Still chapter 4 ---------------------------------
+##### SPLINES --------------------------------
+# This is essentially the code straight from the book
+data(cherry_blossoms)
+OurData <- cherry_blossoms
+precis(OurData)
+plot(temp~year
+     , data = cherry_blossoms
+     , col = col.alpha(rangi2,0.5)
+)
+
+# Divide x into num_knots regularly spaced quantiles to 
+# place 'knots' for spline
+d2 <- OurData[ complete.cases(OurData$temp) , ] # complete cases on temp
+num_knots <- 5
+degree <- 2
+knot_list <- quantile(d2$year , probs=seq(0,1,length.out=num_knots))
+
+# We need this 
+library(splines)
+B <- bs(d2$year,
+        knots=knot_list[-c(1,num_knots)],
+        degree=degree, intercept=TRUE)
+plot(NULL 
+     , xlim=range(d2$year) 
+     , ylim=c(0,1) 
+     , xlab="year" 
+     , ylab="basis value"
+)
+for (i in 1:ncol(B)) 
+  lines(d2$year, B[,i])
+model_splines <- quap(
+  alist(
+    T ~ dnorm(mu, sigma),
+    mu <- a + B %*% w,
+    # This is matrix multiplication, which is the same as
+    # mu <- a + sapply(1:1124, function(i) sum(B[i,]*w)),
+    a ~ dnorm(6,10),
+    w ~ dnorm(0,1),
+    sigma ~ dexp(1)
+  ),
+  data=list(T=d2$temp, B=B),
+  start=list(w=rep(0, ncol(B))) 
+)
+precis(model_splines, depth=2)
+
+post <- extract.samples(model_splines)
+w <- apply( post$w , 2 , mean )
+plot( NULL , xlim=range(d2$year) , ylim=c(-2,2) ,
+      xlab="year" , ylab="basis * weight" )
+for ( i in 1:ncol(B) ) lines( d2$year , w[i]*B[,i] )
+
+mu <- link(model_splines)
+mu_PI <- apply(mu,2,PI,0.97)
+plot(d2$year , d2$temp , col=col.alpha(rangi2,0.3) , pch=16 )
+shade( mu_PI , d2$year , col=col.alpha("black",0.5) )
+
+# End of chapter 4 (not video 4) ------------------------
+
 #### SPLINES WORKED EXAMPLE ------------
 # OK now let's do proper workflow with Howell data.
+
+## THis is the third part of chp 4 and video 4
+## 2nd edition of the book, videos from 2023
+## Using the Howell human growth data, this time with kids:
+## fitting a curve rather than linear relationship
 
 ##### Setup ----------------------
 # We need:

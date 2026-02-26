@@ -1,8 +1,8 @@
 ## CODE TO GO WITH BOOKCLUB
 ## ON Richard McElreath's 'Statistical Rethinking'
-# Anna Dornhaus, 2025
+# Anna Dornhaus, 2026
 
-########### PART IV: Workflow and Curves ##########
+########### PART IV: Workflow ##########
 ## I recommend 'closing' all sections for better readability, and only opening the section
 ## you are working on: click on the small triangles by the line numbers to close/open
 ##
@@ -20,10 +20,6 @@ d2 <- d[d$age >= 18, ]
 ## This script has two parts:
 ## First, actually going through the whole workflow for the weight(height)
 ## fitting.
-## Second, about the third part of chp 4 and video 4
-## 2nd edition of the book, videos from 2023
-## Using the Howell human growth data, this time with kids:
-## fitting a curve rather than linear relationship
 
 ### Proper analysis workflow -------------------
 ## First we practice what we preach by testing model with simulated data, 
@@ -40,145 +36,140 @@ d2 <- d[d$age >= 18, ]
 # * Testing the workflow forces you to examine what you think the generative model
 # is and making sure there are neither coding nor interpretive errors.
 
-#### Define generative model -------------------------
+## EXAMPLE 1: fitting a model of weight ~ height ---------------------------------------------------
+#### Step 1: Define generative model -------------------------
 # We assume that weight W is proportional to height H, but with a normally 
-# distributed error U. This means we have parameters slope (b), intercept (i),
-# and standard deviation of U (sd). 
-# We're going to assume the heights H are not yet standardized.
-sim_weight <- function(H, b, i, sd) {
-  U <- rnorm(length(H), 0, sd)
-  W <- b * (H - mean(H)) + i + U
-  return(W)
+# distributed error U. This means in general we have parameters slope (b), intercept (i),
+# and standard deviation of U (sd).
+# Here we subtract the mean of the heights vector, which is not yet standardized, in 
+# order for the 'intercept' to be the intercept at the mean (of height), not the 
+# normal intercept at height=0. This is because we already know our model will not do 
+# well near height=0, and also whatever the value is there is not that informative. 
+# If we use the intercept at mean, we know that it should reflect the weight of a person of 
+# medium height. 
+sim_weight <- function(vector_of_heights, slope, intercept, error_sd) {
+  samplesize <- length(vector_of_heights)
+  error_around_line <- rnorm(samplesize, 0, error_sd)
+  responsevariable <- slope * (vector_of_heights - mean(vector_of_heights)) + intercept + error_around_line
+  return(responsevariable)
 }
 
-#### Define hypothesis simulated ------------------
-
-# I'm going to assume that to properly test our analysis workflow, we're going
-# to simulate data with different sample sizes. Lets say
-N_1 <- 3
-N_2 <- 10
-N_3 <- 100
-
-# Parameters for the generative model. We assume units of kg and cm.
+##### Define hypothesis simulated ------------------
+# The parameters for the generative model are essentially the hypothesis; they are
+# what we want to get out.
+# Note that in this version, we have not yet standardized anything (weights or heights),
+# so these parameters really reflect the actual slopes etc. in original units (here
+# that is cm for height and kg for weight).
 slope_b <- 0.7 # b
-intercept_w_h <- 50 # i
+intercept_at_mean <- 50 # i
 error_term <- 5 # sigma
 
-# When we are generating (fake) data, we also need to define the set of heights
-# we want to use. We'll pick normally distributed heights.
+#### Step 2: Generating the actual simulated data ---------------------
+samplesize <- 100 
+# Note that for this to be a proper test of how well our analysis is going to work,
+# this should be close to the sample size we actually have or anticipate. 
+
+# When we are generating (fake) data, we first need to define the set of x-values
+# we want to use. Here, that's heights, and we'll pick them from a normal distribution.
 mean_height <- 170
 sd_height <- 10
+heights <- rnorm(samplesize, mean = mean_height, sd = sd_height)
 
-# Now, we're on the way to generating three sets of fake data for our model:
-heights1 <- rnorm(N_1, mean = mean_height, sd = sd_height)
-heights2 <- rnorm(N_2, mean = mean_height, sd = sd_height)
-heights3 <- rnorm(N_3, mean = mean_height, sd = sd_height)
+# If we wanted a regularly spaced, uniform set of x values, this is what we 
+# could use:
+#tempmin <- 0
+#tempmax <- 35
+#temps <- seq(tempmin, tempmax, (tempmax-tempmin)/(samplesize-1))
 
-#### Generating the actual simulated data ---------------------
-# After this, we can simulate corresponding weights
-weights1 <- sim_weight(heights1, slope_b, intercept_w_h, error_term) 
-simdata1 <- data.frame(heights1, weights1)
-colnames(simdata1) <- c("Height", "Weight")
-weights2 <- sim_weight(heights2, slope_b, intercept_w_h, error_term) 
-simdata2 <- data.frame(heights2, weights2)
-colnames(simdata2) <- c("Height", "Weight")
-weights3 <- sim_weight(heights3, slope_b, intercept_w_h, error_term) 
-simdata3 <- data.frame(heights3, weights3)
-colnames(simdata3) <- c("Height", "Weight")
+# Now, we're on the way to generating a full fake data table, by simulating 
+# weights that correspond to our set of simulated heights:
+weights <- sim_weight(heights, slope_b, intercept_at_mean, error_term) 
+simdata <- data.frame(heights, weights)
+colnames(simdata) <- c("Height", "Weight")
 
-### Prep real data ---------------------------------------
+##### Prep real data ---------------------------------------
 # The real data we will use is d2.
 realdata <- d2
+# We want it to have the exact same format as the simulated data (or vice versa):
 colnames(realdata) <- c("Height", "Weight")
 
-### Standardize data (both real and simulated) ----------------------------
-# Standardization done prior to model is better he says.
+#### Step 3: Standardize data (both real and simulated) ----------------------------
+# Standardization done prior to model is better he says. This is the general formula
+# for the 'z-score': everything is centered on its mean, and relative to the 
+# standard deviation in the data. Thus, a z-score of 1 means one standard deviation 
+# higher than the mean. 
 zscore <- function(dat) {
   z <- (dat - mean(dat)) / sd(dat)
   return(z)
 }
 
-simdata1_z <- data.frame(zscore(simdata1$Height), zscore(simdata1$Weight))
-simdata2_z <- data.frame(zscore(simdata2$Height), zscore(simdata2$Weight))
-simdata3_z <- data.frame(zscore(simdata3$Height), zscore(simdata3$Weight))
-realdata_z <- data.frame(zscore(realdata$Height), zscore(realdata$Weight))
-colnames(simdata1_z) <- c("Height", "Weight")
-colnames(simdata2_z) <- c("Height", "Weight")
-colnames(simdata3_z) <- c("Height", "Weight")
+# In actual fact, we only standardize the x-axis - and if we have a multifactorial
+# model, we want to standardize all the input factors. The response does not have
+# to be standardized, since its distribution just emerges from what we assume the
+# generative model is. 
+simdata_z <- data.frame(zscore(simdata$Height), simdata$Weight)
+realdata_z <- data.frame(zscore(realdata$Height), realdata$Weight)
+colnames(simdata_z) <- c("Height", "Weight")
 colnames(realdata_z) <- c("Height", "Weight")
 
 # Let's make sure this worked correctly. We'll plot the untransformed next to the 
 # transformed data.
-# Defining a nice color set
-sim_sets_colors <- viridis(3, alpha = 0.7, begin = 0.1, end = 0.9)
-# Determining extent of axes
-h_max <- max(simdata1$Height, simdata2$Height, simdata3$Height, realdata$Height)
-w_max <- max(simdata1$Weight, simdata2$Weight, simdata3$Weight, realdata$Weight)
-h_min <- min(simdata1$Height, simdata2$Height, simdata3$Height, realdata$Height)
-w_min <- min(simdata1$Weight, simdata2$Weight, simdata3$Weight, realdata$Weight)
+# Defining a nice color
+sim_data_color <- "seagreen"
+real_data_color <- "slateblue"
+# Determining extent of axes; this is just making sure we capture all the points
+# from either dataset. In a lot of cases, you can probably specify this manually.
+h_max <- max(simdata$Height, realdata$Height)
+w_max <- max(simdata$Weight, realdata$Weight)
+h_min <- min(simdata$Height, realdata$Height)
+w_min <- min(simdata$Weight, realdata$Weight)
+
 # Two graphs next to each other
 par(mfrow=c(1,2))
 # Plotting the real data first
 plot(realdata$Weight ~ realdata$Height
-     , col = alpha("slateblue", 0.3)
+     , col = alpha(real_data_color, 0.3) #I'm assuming here there are a lot of these,
+     # and so making them fairly transparent. You don't have to do this. 
      , pch = 19
      , xlim = c(h_min, h_max)
      , ylim = c(w_min, w_max)
-     , xlab = "Height"
-     , ylab = "Weight"
+     , xlab = "Height [cm]"
+     , ylab = "Weight [kg]"
      #, main = "Data in real units"
-     )
+)
+# And now the simulated data next to it. 
+# Remember there is no particular reason to think that the simulated data will 
+# 'fit' the real data; they are after all just whatever parameters for the model
+# we put in.
 points(Weight ~ Height
-       , data = simdata3
-       , bg = sim_sets_colors[3]
+       , data = simdata
+       , bg = sim_data_color # Again somewhat arbitrary but I wanted the points
+       # to have a black outline, and that is what this does. 
        , pch = 21
        , col = "black"
-      )
-points(Weight ~ Height
-       , data = simdata2
-       , bg = sim_sets_colors[2]
-       , pch = 21
-       , col = "black"
-       )
-points(Weight ~ Height
-       , data = simdata1
-       , bg = sim_sets_colors[1]
-       , pch = 21
-       , col = "black"
-       )
+)
 legend("bottomright"
-       , legend = c("Real data", "Sim data 1", "Sim data 2", "Sim data 3")
-       , col = c("slateblue", sim_sets_colors[1], sim_sets_colors[2], sim_sets_colors[3])
+       , legend = c("Real data", "Sim data")
+       , col = c(real_data_color, sim_data_color)
        , pch = 19
        #, bty="n"
        #, cex = 0.75
 )
 mtext("Data in real units", 3, 2, cex = 1.25)
-mtext(paste("3 simulated sets with N1=", N_1, ", N2=", N_2, ", N3=", N_3, sep = ""), 3, 1)
-# Now we'll plot the same 4 datasets but in their standardized form.
+mtext(paste("Simulated data N=", samplesize), 3, 1)
+
+# Now we'll plot the same 2 datasets but with a standardized x-axis.
 plot(realdata_z$Weight ~ realdata_z$Height
-     , col = alpha("slateblue", 0.3)
+     , col = alpha(real_data_color, 0.3)
      , pch = 19
      , xlim = c(-3, 3)
-     , ylim = c(-3, 3)
-     , xlab = "Z-Score Height"
-     , ylab = "Z-Score Weight"
+     , ylim = c(w_min, w_max)
+     , xlab = "Z-Score Height [sd]"
+     , ylab = "Weight [kg]"
 )
 points(Weight ~ Height
-       , data = simdata3_z
-       , bg = sim_sets_colors[3]
-       , pch = 21
-       , col = "black"
-)
-points(Weight ~ Height
-       , data = simdata2_z
-       , bg = sim_sets_colors[2]
-       , pch = 21
-       , col = "black"
-)
-points(Weight ~ Height
-       , data = simdata1_z
-       , bg = sim_sets_colors[1]
+       , data = simdata_z
+       , bg = sim_data_color
        , pch = 21
        , col = "black"
 )
@@ -186,41 +177,79 @@ mtext("Standardized x", 3, 2, cex = 1.25)
 # What's different between these two graphs?
 # The overall orientation of points to each other, within each dataset (!),
 # should be the same. However, the point cloud should have moved to be 
-# centered on 0 in both dimensions (axes), and the axis that had less variation
-# will be drawn out, so that the amount of variation looks the same in both 
-# axes. 
+# centered on 0 in the x-dimensions (axis). 
 
-### Define priors -------------------------------------
+#### Step 4: Define priors -------------------------------------
 # Remember priors are really also probability distributions (just like
 # likelihood and posterior are). 
 # So we are not defining a single slope as the prior, but over all slopes,
 # we are defining how likely we find each of them (prior to knowing about
 # the current dataset).
 
-# Here we are going to assume that our prior for the intercept is normally
-# distributed, our prior for the slope is uniformly distributed, and our
-# prior for sigma is also uniformly distributed and its minimum is 0.
+# Here we are going to assume that our priors for the intercept and slope are normally
+# distributed, and our prior for sigma is uniformly distributed and its minimum is 0.
 # Given these assumptions about the shape of the prior, we just have to define
 # these parameters:
+
+# Intercept of model - remember we want to think about the intercept as the y value
+# at the mean x value - and with our standardized x, this is automatic, since
+# the mean x is in fact 0. Also, the intercept is in units of the y-axis, so if 
+# the y-axis is not transformed, this is here units of weight (specifically kg).
 intercept_prior_mean <- 50
-intercept_prior_SD <- 25
-slope_prior_min <- 0
-slope_prior_max <- 10
+intercept_prior_SD <- 10
+
+# Slope of model - the slope is how much more weight per height. Now if the height
+# is standardized, this is really how much more y (so weight) do we get for an 
+# increase in x (so height) of 1 standard deviation. In the original data, 
+sd(realdata$Height)
+# So that means our prior says this is how much weight we think may be added for this 
+# increase in height. The units of the slope are thus [kg/sd of height].
+slope_prior_mean <- 10
+slope_prior_sd <- 5
+# Lastly, we define our prior for the error term. This 'max' here is really what is 
+# the largest error term, in units of y (so kg) that we will allow for people of
+# the same height. 
 sigma_prior_max <- 20
 
-# Here is the formal list of the assumptions:
+# Here is the formal list of the assumptions in McElreath's notation:
+# (You can think of it as happening in reverse order, i.e. from the bottom up)
 list_of_assumptions <- alist(
-  W ~ dnorm(mu, sigma),
-  mu <- a + b*H,
-  a ~ dnorm(intercept_prior_mean, intercept_prior_SD),
-  b ~ dunif(slope_prior_min, slope_prior_max),
-  sigma ~ dunif(0, sigma_prior_max)
+  W ~ dnorm(mu, sigma), # This is adding the error term to the model
+  mu <- a + b*H, # This is the core model formula
+  a ~ dnorm(intercept_prior_mean, intercept_prior_SD), # This is picking an intercept based on the prior
+  b ~ dnorm(slope_prior_mean, slope_prior_sd), # This is picking a slope based on the prior
+  sigma ~ dunif(0, sigma_prior_max) # This is picking an error term based on the prior
 )
 
 # Let's plot some samples from this prior to make sure it's reasonable.
 n_plot <- 100
+# We pick some slopes from these priors just like the 'a' and 'b' lines in the model
+# assumption list. 
 intercepts_at_mean <- rnorm(n_plot, intercept_prior_mean, intercept_prior_SD)
-slopes <- runif(n_plot, slope_prior_min, slope_prior_max)
+slopes <- rnorm(n_plot, slope_prior_mean, slope_prior_sd)
+# We also have a prior for the error but we're going to leave this out here.
+
+# First re-plot the right graph from before: 
+par(mfrow=c(1,1))
+plot(realdata_z$Weight ~ realdata_z$Height
+     , col = alpha(real_data_color, 0.3)
+     , pch = 19
+     , xlim = c(-3, 3)
+     , ylim = c(w_min, w_max)
+     , xlab = "Z-Score Height [sd]"
+     , ylab = "Weight [kg]"
+)
+points(Weight ~ Height
+       , data = simdata_z
+       , bg = sim_data_color
+       , pch = 21
+       , col = "black"
+)
+mtext("Standardized x", 3, 2, cex = 1.25)
+
+# Then add n_plot lines corresponding to the prior we picked. Remember the 'prior'
+# is really the whole distribution of lines (or a probability distribution, i.e. an
+# infinite number of lines).
 for ( i in 1:n_plot ) 
   curve(intercepts_at_mean[i] + slopes[i]*x
         , from=-3, to=3
@@ -229,7 +258,7 @@ for ( i in 1:n_plot )
   )
 mtext("Lines are samples from prior", 3, 1)
 
-#### Define Bayesian model procedure -------------------
+#### Step 5: Define Bayesian model procedure -------------------
 # This is where the model fitting happens, i.e. here we use quap().
 
 # It is helpful to define starting values, as the quap() optimization
@@ -240,7 +269,7 @@ start <- function(dat) {
   return(
     list(
       a = mean(dat$Weight)
-      , b = slope_prior_min + (slope_prior_max-slope_prior_min)/2
+      , b = slope_prior_mean
       , sigma = sd(dat$Weight)
     )
   )
@@ -253,32 +282,146 @@ W_H_model <- function(dat) {
     list_of_assumptions
     , data = list(W=dat$Weight, H=dat$Height)
     , start = start(dat)
-    )
+  )
 }
 
-#### Run model on simulated data ------------------------
+#### Step 6: Run model on simulated data ------------------------
 # Ok we defined our model as a function above, now we run it on some data.
 
 # First, we want to check it is working on the simulated data.
-post_sim1 <- W_H_model(simdata1_z)
-precis(post_sim1)
-post_sim2 <- W_H_model(simdata2_z)
-precis(post_sim2)
-post_sim3 <- W_H_model(simdata3_z)
-precis(post_sim3)
+post_sim <- W_H_model(simdata_z)
+precis(post_sim)
 
 # We actually know what the 'correct' values for a, b, and sigma are - they are our 
 # assumptions in the generative model of b (the slope), a (the intercept), and the
 # error term (sigma).
-slope_b
-intercept_w_h
-error_term
-# Now, our original slope is in terms of the real units of x (i.e. height), so
-# it won't be the same as what we found in the posterior. 
-# But the other two parameters should be close, and in fact should be getting 
-# closer to the real value with higher sample size (from simdata1 to simdata3).
+slope_b # This is b
+error_term # This is sigma
+intercept_at_mean # This is a
+# Oh! But the slope in slope_b is in units of [kg/cm], while the slope in the model
+# is in units of [kg/sd], because we had standardized the x-axis. To convert out input
+# parameter, we will want to multiply it with the standard deviation:
+corrected_slope_value <- slope_b * sd(simdata$Height)
+corrected_slope_value # This is now really the b that is the output of the model. 
+
+# So, these parameters should be pretty close. If they are not, your model does 
+# not have the power to find the parameters more accurately than you see here. 
+# However, you can simulate with higher sample size, and this should get you
+# closer and closer to the actual assumed parameters.
+
+#### Step 7: Run model on real data -----------------------------
+# Since we defined everything as functions, all we have to do is this:
+post_real <- W_H_model(realdata_z)
+precis(post_real)
+
+# This now gives us our answer, namely the 'real' estimated parameter values -
+# but actually better, because 'precis' is just a summary, what we actually have 
+# is a probability distribution over all possible parameter values showing how
+# likely we think each one is, based on prior and data. 
+
+# Illustrating and interpreting the posterior is the next step.  --------------
+# Here I'm just going to add this 'average' posterior line into the graph:
+# First for simulated data - 
+abline(precis(post_sim)[1,1], precis(post_sim)[2,1]
+       , lwd = 3
+       , col = sim_data_color
+)
+# Now for real data - 
+abline(precis(post_real)[1,1], precis(post_real)[2,1]
+       , lwd = 3
+       , col = real_data_color
+)
+# Note that I am sure McElreath wouldn't like this as the point of having a 
+# posterior is to understand the distribution and thus the certainty. But
+# I am leaving the better illustration for the next example. 
+# End example workflow without standardizing y-axis --------------
+
+## EXAMPLE 2: same model, more versions of simulated data ---------------------------------------------
+#### Generating simulated data -------------------------
+# Everything is pretty much the same as above. 
+# So I am assuming
+# -sim_weight() 
+# -the parameters for the hypothesis
+# have already been defined in Step 1 above, and
+# - zscore()
+# has been defined also (above it's in Step 3). 
+
+# I'm going to assume that to properly test our analysis workflow, we're going
+# to simulate data with different sample sizes. Lets say
+N_1 <- 3
+N_2 <- 10
+N_3 <- 100
+# Now, we're on the way to generating three sets of fake data for our model:
+heights1 <- rnorm(N_1, mean = mean_height, sd = sd_height)
+heights2 <- rnorm(N_2, mean = mean_height, sd = sd_height)
+heights3 <- rnorm(N_3, mean = mean_height, sd = sd_height)
+# After this, we can simulate corresponding weights
+weights1 <- sim_weight(heights1, slope_b, intercept_at_mean, error_term) 
+simdata1 <- data.frame(heights1, weights1)
+colnames(simdata1) <- c("Height", "Weight")
+weights2 <- sim_weight(heights2, slope_b, intercept_at_mean, error_term) 
+simdata2 <- data.frame(heights2, weights2)
+colnames(simdata2) <- c("Height", "Weight")
+weights3 <- sim_weight(heights3, slope_b, intercept_at_mean, error_term) 
+simdata3 <- data.frame(heights3, weights3)
+colnames(simdata3) <- c("Height", "Weight")
+
+# If you wanted to experiment with this, you could instead simulate three different
+# parameter values, or data derived from different qualitative hypotheses (e.g.
+# different sim_weights functions).
+
+#### Standardize data (both real and simulated) ----------------------------
+simdata1_z <- data.frame(zscore(simdata1$Height), simdata1$Weight)
+simdata2_z <- data.frame(zscore(simdata2$Height), simdata2$Weight)
+simdata3_z <- data.frame(zscore(simdata3$Height), simdata3$Weight)
+realdata_z <- data.frame(zscore(realdata$Height), realdata$Weight)
+colnames(simdata1_z) <- c("Height", "Weight")
+colnames(simdata2_z) <- c("Height", "Weight")
+colnames(simdata3_z) <- c("Height", "Weight")
+colnames(realdata_z) <- c("Height", "Weight")
+
+#### Run model on simulated data ------------------------
+# Ok we defined our model as a function above, now we can run it on any data we want.
+post_sim1 <- W_H_model(simdata1_z)
+post_sim2 <- W_H_model(simdata2_z)
+post_sim3 <- W_H_model(simdata3_z)
+
+# Let's make a comparison table:
+inputpars <- c(intercept_at_mean, slope_b, error_term)
+c1 <- round(precis(post_sim1)[,1], 2)
+c2 <- round(precis(post_sim2)[,1], 2)
+c3 <- round(precis(post_sim3)[,1], 2)
+# Remember though that our slope values have to be corrected, so 
+c1[2] <- round(c1[2] / sd(simdata1$Height), 2)
+c2[2] <- round(c2[2] / sd(simdata2$Height), 2)
+c3[2] <- round(c3[2] / sd(simdata3$Height), 2)
+outcomes <- data.frame(inputpars, c1, c2, c3)
+colnames(outcomes) <- c("Inputvals"
+                        , paste("Sim_N=", N_1, sep="")
+                        , paste("Sim_N=", N_2, sep="")
+                        , paste("Sim_N=", N_3, sep=""))
+##### Results of simulated data analysis -----------------------
+# Show it:
+outcomes
+# If what you did is simulate datasets with different sample size, the higher
+# sample size ones should enable you to better estimate the original parameters.
+
+# End example workflow with outcomes for multiple simulated datasets ------------
+
+## ILLUSTRATE RESULTS ------------------------------------
+
 
 ##### Plot the results for simulated data to test working of the model ------------
+
+# Defining a nice color set
+sim_sets_colors <- viridis(3, alpha = 0.7, begin = 0.1, end = 0.9)
+# Determining extent of axes
+w_max <- max(simdata1$Weight, simdata2$Weight, simdata3$Weight, realdata$Weight)
+w_min <- min(simdata1$Weight, simdata2$Weight, simdata3$Weight, realdata$Weight)
+# Since height is standardized, we just plot from -3 to +3 - most data will be
+# within 3 standard deviations of the mean. 
+mtext(paste("3 simulated sets with N1=", N_1, ", N2=", N_2, ", N3=", N_3, sep = ""), 3, 1)
+
 ####### Plot frame & simdata points ------------
 par(mfrow=c(1,1))
 plot(realdata$Weight ~ realdata$Height
@@ -516,173 +659,4 @@ points(Weight ~ Height
 # - if you want you could adjust the axes ranges here according to the real data.
 ##############################################################################
 
-##############################################################################
 
-### FITTING CURVES -----------------------------------------------
-#### Chapter 4 -----------------------------------
-#First, going along with the book & videos about how curve-fitting works
-
-# Actual dataset - plotting just to check
-plot(d$weight~d$height)
-xbar <- mean(d$height)
-ybar <- mean(d$weight)
-# Standardize data
-H_stand <- zscore(d$height)
-Hsq_stand <- H_stand*H_stand
-# Priors
-intercept_prior_mean <- 50
-intercept_prior_SD <- 50
-linearslope_prior_mean <- 0
-linearslope_prior_sd <- 1
-sigma_prior_max <- 20
-# Other elements of the prior are the parameters for the quadratic slope
-# and of course the functional form/distribution of these, e.g. lognormal 
-# or uniform; these are specified in the model
-
-# Simulate some samples from priors for plot (i.e. parameter value sets)
-n_plot <- 50
-intercepts_at_mean <- rnorm(n_plot, intercept_prior_mean, intercept_prior_SD)
-slopes <- rlnorm(n_plot, linearslope_prior_mean, linearslope_prior_sd)
-
-##### Quadratic model -----------------
-# Which is a terrible fit. 
-# illustrate by showing several panels with different sample size?
-
-# Optionally, define starting points for the estimation algorithm
-start <- list(
-  a = ybar,
-  b1 = 0.5,
-  b2 = 0,
-  sigma = sd(d$weight)
-)
-
-# Actual model
-# using log-normal distribution for linear factor to force positive slope
-model2.0 <- quap(
-  alist(
-    weight ~ dnorm(mu, sigma),
-    mu <- a + b1*H_stand + b2*Hsq_stand,
-    a ~ dnorm(intercept_prior_mean, intercept_prior_SD),
-    b1 ~ dlnorm(linearslope_prior_mean, linearslope_prior_sd),
-    b2 ~ dnorm(linearslope_prior_mean, linearslope_prior_sd),
-    sigma ~ dunif(0, sigma_prior_max)
-  )
-  , data=d
-  , start = start
-)
-
-precis(model2.0)
-
-# Now we'll graph and interpret the result by sampling from the posterior
-height_seq <- seq(min(H_stand)*1.1, max(H_stand)*1.1, len=n_plot)
-# The n_plot just determines the resolution here - doesn't need to be the same
-# value as what we used for number of lines above. I am multiplying the max and
-# min only to give the plot a bit more space on either side
-# We defined the square term as a separate value, so need to generate this
-sim_input_xvalues <- list(H_stand=height_seq, Hsq_stand=height_seq^2)
-sim_weight <- sim(model2.0, data = sim_input_xvalues, n=100)
-# Note the above generates predictions from the posterior using sim()
-# Remember 'PI' stands for percentile interval
-weight.PI <- apply(sim_weight, 2, PI, prob=0.95)
-# Instead of predictions, we can extract posteriors for mu:
-mu <- link(model2.0, data=sim_input_xvalues, n=1000)
-mu.mean <- apply(mu, 2, mean)
-mu.PI <- apply(mu, 2, PI, prob=0.95)
-
-# McElreath's graph, fig. 4.11 in book:
-plot(weight ~ H_stand, data=d, col=col.alpha(rangi2,1) 
-     , xaxt = "n" # We'll plot original units on later
-     , xlab = "Height [cm]"
-     , ylab = "Weight [kg]"
-     , xlim = c(min(H_stand), max(H_stand))
-     )
-lines(height_seq, mu.mean, lwd = 3)
-shade(mu.PI , height_seq ) # Describing posterior for mu
-shade(weight.PI , height_seq ) # Describing posterior for overall data
-
-# Plotting the correct x-axis units
-at <- c(-3,-2,-1,0,1)
-labels <- round(at*sd(d$height) + mean(d$height))
-axis(side=1, at=at, labels=round(labels,1))
-
-# Note my graph above had also used this more explicit way of sampling
-# from the posterior:
-samples_of_posterior <- extract.samples(model2.0, n=n_plot)
-
-#### VIDEO 4 --------------------
-
-## McElreath says DO NOT USE polynomials. Why? Because they are 
-## 'global' smoothers, assuming various symmetries across the whole 
-## x-range, and any datapoint anywhere can change the curve arbitrarily 
-## far away from itself.
-## After all, we are talking about not-mechanistically motivated
-## polynomials purely for the purpose of fitting a non-linear pattern.
-## It is always better to use a functional form derived from mechanistic
-## understanding (e.g. if you expect something to be logarithmic or something else).
-
-## If you don't have that, use splines. Splines simply create localized
-## fits and then smoothe the transitions. 
-
-#### Still chapter 4 ---------------------------------
-##### SPLINES --------------------------------
-# This is essentially the code straight from the book
-data(cherry_blossoms)
-OurData <- cherry_blossoms
-precis(OurData)
-plot(temp~year
-     , data = cherry_blossoms
-     , col = col.alpha(rangi2,0.5)
-     )
-
-# Divide x into num_knots regularly spaced quantiles to 
-# place 'knots' for spline
-d2 <- OurData[ complete.cases(OurData$temp) , ] # complete cases on temp
-num_knots <- 5
-degree <- 2
-knot_list <- quantile(d2$year , probs=seq(0,1,length.out=num_knots))
-
-# We need this 
-library(splines)
-B <- bs(d2$year,
-        knots=knot_list[-c(1,num_knots)],
-        degree=degree, intercept=TRUE)
-plot(NULL 
-     , xlim=range(d2$year) 
-     , ylim=c(0,1) 
-     , xlab="year" 
-     , ylab="basis value"
-     )
-for (i in 1:ncol(B)) 
-  lines(d2$year, B[,i])
-model_splines <- quap(
-  alist(
-    T ~ dnorm(mu, sigma),
-    mu <- a + B %*% w,
-    # This is matrix multiplication, which is the same as
-    # mu <- a + sapply(1:1124, function(i) sum(B[i,]*w)),
-    a ~ dnorm(6,10),
-    w ~ dnorm(0,1),
-    sigma ~ dexp(1)
-  ),
-  data=list(T=d2$temp, B=B),
-  start=list(w=rep(0, ncol(B))) 
-  )
-precis(model_splines, depth=2)
-
-post <- extract.samples(model_splines)
-w <- apply( post$w , 2 , mean )
-plot( NULL , xlim=range(d2$year) , ylim=c(-2,2) ,
-      xlab="year" , ylab="basis * weight" )
-for ( i in 1:ncol(B) ) lines( d2$year , w[i]*B[,i] )
-
-mu <- link(model_splines)
-mu_PI <- apply(mu,2,PI,0.97)
-plot(d2$year , d2$temp , col=col.alpha(rangi2,0.3) , pch=16 )
-shade( mu_PI , d2$year , col=col.alpha("black",0.5) )
-
-# End of chapter 4 (not video 4) ------------------------
-
-#### SPLINES WORKED EXAMPLE ------------
-# OK now let's do proper workflow with Howell data.
-
-## MOVED THIS TO A SEPARATE SCRIPT '4b'

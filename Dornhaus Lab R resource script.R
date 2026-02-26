@@ -136,6 +136,7 @@ EnormousData <- do.call("bind_rows", listOfDataframes)
 
 
 # GRAPHING THINGS ------------------------------
+
 ### BOXPLOTS ### ---------------
 # Generally you use a boxplot when plotting a continuous y
 # against a categorical x axis (e.g. an outcome against 2 treatments).
