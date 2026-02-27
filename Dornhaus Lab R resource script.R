@@ -28,7 +28,7 @@ library(readxl)
 library(googlesheets4) # for working with Google Sheets
 library(googledrive) # for drive_download
 # Colors
-library(scales)  # for number_format & color scales
+library(scales)  # for number_format & color scales; unnecessary if you install tidyverse (bc included)
 library(viridis)
 # Making output tables for statistical models
 library(sjPlot) # for linear models output tables
