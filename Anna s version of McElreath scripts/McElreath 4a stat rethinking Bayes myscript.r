@@ -299,7 +299,7 @@ slope_b # This is b
 error_term # This is sigma
 intercept_at_mean # This is a
 # Oh! But the slope in slope_b is in units of [kg/cm], while the slope in the model
-# is in units of [kg/sd], because we had standardized the x-axis. To convert out input
+# is in units of [kg/sd], because we had standardized the x-axis. To convert our input
 # parameter, we will want to multiply it with the standard deviation:
 corrected_slope_value <- slope_b * sd(simdata$Height)
 corrected_slope_value # This is now really the b that is the output of the model. 
@@ -331,8 +331,9 @@ abline(precis(post_real)[1,1], precis(post_real)[2,1]
        , lwd = 3
        , col = real_data_color
 )
-# Note that I am sure McElreath wouldn't like this as the point of having a 
-# posterior is to understand the distribution and thus the certainty. But
+# Note that I am sure McElreath wouldn't like this, as the point of having a 
+# posterior is to understand the distribution and thus the certainty (instead of 
+# just putting a single 'regression line'). But
 # I am leaving the better illustration for the next example. 
 # End example workflow without standardizing y-axis --------------
 
@@ -396,7 +397,7 @@ c1[2] <- round(c1[2] / sd(simdata1$Height), 2)
 c2[2] <- round(c2[2] / sd(simdata2$Height), 2)
 c3[2] <- round(c3[2] / sd(simdata3$Height), 2)
 outcomes <- data.frame(inputpars, c1, c2, c3)
-colnames(outcomes) <- c("Inputvals"
+colnames(outcomes) <- c("Input vals"
                         , paste("Sim_N=", N_1, sep="")
                         , paste("Sim_N=", N_2, sep="")
                         , paste("Sim_N=", N_3, sep=""))
@@ -507,7 +508,7 @@ abline(post_interc_sim3, post_slope_sim3
        )
 
 ####### Plot the original hypothesis the simulated data are based on ----------
-intercept_at_zero <- intercept_w_h - mean_height * slope_b
+intercept_at_zero <- intercept_at_mean - mean_height * slope_b
 abline(intercept_at_zero, slope_b
        , lwd = 3
        , col = alpha("black", 0.8)
@@ -515,7 +516,7 @@ abline(intercept_at_zero, slope_b
 )
 
 legend("bottomright"
-       , legend = c("Assumed pars", "Sim data 1", "Sim data 2", "Sim data 3", "Prior")
+       , legend = c("Input par values", "Sim data 1", "Sim data 2", "Sim data 3", "Prior")
        , col = c("black", sim_sets_colors[1], sim_sets_colors[2], sim_sets_colors[3], alpha("black", 0.1))
        , pch = c(NA, 19, 19, 19, NA)
        #, bty="n"
@@ -604,9 +605,20 @@ abline(intercept_at_zero, slope_b
        , col = alpha("black", 0.8)
        , lty = 2
 )
+# Ok, so now we have a graph that shows the actual true relationship (black dashed
+# line, which we know because this is a simulation - normally we don't know this);
+# the data points (points); the posterior regression lines, i.e. the estimated 
+# slope & intercept with the uncertainty around it (colored lines - note that how
+# many of these we plot here is arbitrary, you should think of them as illustrating
+# a probability distribution of where the 'true' line is); and the prediction
+# uncertainty (shaded area - this is what we would say, based on the posterior, 
+# where data points might be - again this is really a probability distribution and we 
+# arbitrarily chose to shade the area that covers 90% of the probability). 
+# The width of the shaded area depends not just on where the 'regression line' is
+# but also on how high the error around that average relationship is, i.e. how 
+# much spread around the line the points have. 
 
-
-#### Run model on real data -------------------------
+#### Run model & make this illustration for real data -------------------------
 # The whole point is that we use the exact same analysis function as on the simulated
 # data:
 post_real <- W_H_model(realdata_z)
