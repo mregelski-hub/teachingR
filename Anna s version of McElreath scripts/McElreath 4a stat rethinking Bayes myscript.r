@@ -265,7 +265,7 @@ mtext("Lines are samples from prior", 3, 1)
 # procedure can fail, especially with too few data points. 
 # Hopefully what we do here has no influence on the results, just on whether
 # the approximation procedure works or fails. 
-start <- function(dat) {
+start_from_data <- function(dat) {
   return(
     list(
       a = mean(dat$Weight)
@@ -281,7 +281,7 @@ W_H_model <- function(dat) {
   quap(
     list_of_assumptions
     , data = list(W=dat$Weight, H=dat$Height)
-    , start = start(dat)
+    , start = start_from_data(dat)
   )
 }
 

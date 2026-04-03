@@ -13,7 +13,14 @@ library(splines)
 library(viridisLite)
 
 ##############################################################################
-
+## Loading the data we'll use -----------------
+data(Howell1)
+d <- Howell1
+d2 <- d[d$age >= 18, ]
+zscore <- function(dat) {
+  z <- (dat - mean(dat)) / sd(dat)
+  return(z)
+}
 ### FITTING CURVES -----------------------------------------------
 #### Chapter 4 -----------------------------------
 #First, going along with the book & videos about how curve-fitting works
